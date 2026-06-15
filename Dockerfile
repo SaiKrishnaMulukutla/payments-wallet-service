@@ -1,5 +1,5 @@
 # ---- build stage: compile + package inside a Gradle/JDK21 image (no host JDK needed) ----
-FROM gradle:jdk21 AS build
+FROM gradle:8.11.1-jdk21 AS build
 WORKDIR /home/gradle/src
 # Cache dependency resolution as its own layer
 COPY --chown=gradle:gradle build.gradle settings.gradle ./
