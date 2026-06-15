@@ -17,6 +17,10 @@ repositories {
     mavenCentral()
 }
 
+configurations {
+    mockitoAgent
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -36,6 +40,9 @@ dependencies {
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Mockito as a Java agent (JDK 21+ blocks runtime self-attach, esp. in containers).
+    mockitoAgent('org.mockito:mockito-core') { transitive = false }
 }
 
 dependencyManagement {
@@ -51,4 +58,7 @@ jar {
 
 tasks.named('test') {
     useJUnitPlatform()
+    // JDK 21+ blocks ByteBuddy/Mockito self-attach (fails in containers); pass Mockito
+    // as a -javaagent so its instrumentation is loaded up front, no self-attach needed.
+    jvmArgs "-javaagent:${configurations.mockitoAgent.singleFile}"
 }
