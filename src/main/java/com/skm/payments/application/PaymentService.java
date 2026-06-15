@@ -60,10 +60,10 @@ public class PaymentService {
     try {
       Payment payment = saga.hold(paymentId, request);
       AuthorizationResult authorization = psp.authorize(payment);
-      if (authorization.approved()) {
-        saga.settle(paymentId, authorization.reference());
-      } else {
-        saga.reverse(paymentId);
+      switch (authorization.outcome()) {
+        case CAPTURED -> saga.settle(paymentId, authorization.reference());
+        case PENDING -> saga.authorizePending(paymentId, authorization.reference());
+        case DECLINED -> saga.reverse(paymentId);
       }
     } catch (RuntimeException failure) {
       idempotency.release(claim.getId());

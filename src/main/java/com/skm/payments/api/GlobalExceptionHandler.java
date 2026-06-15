@@ -2,6 +2,7 @@ package com.skm.payments.api;
 
 import com.skm.payments.application.IdempotencyConflictException;
 import com.skm.payments.application.IdempotencyMismatchException;
+import com.skm.payments.application.InvalidSignatureException;
 import com.skm.payments.application.PaymentNotFoundException;
 import com.skm.payments.domain.InsufficientFundsException;
 import org.springframework.http.HttpStatus;
@@ -31,5 +32,10 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(PaymentNotFoundException.class)
   ProblemDetail handleNotFound(PaymentNotFoundException e) {
     return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+  }
+
+  @ExceptionHandler(InvalidSignatureException.class)
+  ProblemDetail handleInvalidSignature(InvalidSignatureException e) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
   }
 }
