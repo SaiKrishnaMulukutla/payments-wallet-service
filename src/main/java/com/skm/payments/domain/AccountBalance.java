@@ -5,15 +5,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.Instant;
-import java.util.UUID;
-
 /**
- * Materialized balance: a fast-read, continuously-reconciled cache.
- * Postings (ledger_entries) remain the authoritative source of every balance.
+ * Materialized balance: a fast-read, continuously-reconciled cache. Postings (ledger_entries)
+ * remain the authoritative source of every balance.
  */
 @Entity
 @Table(name = "account_balances")
@@ -21,16 +20,15 @@ import java.util.UUID;
 @Setter
 public class AccountBalance {
 
-    @Id
-    @Column(name = "account_id")
-    private UUID accountId;
+  @Id
+  @Column(name = "account_id")
+  private UUID accountId;
 
-    @Column(nullable = false)
-    private Long balance = 0L;
+  @Column(nullable = false)
+  private Long balance = 0L;
 
-    @Version
-    private Long version;
+  @Version private Long version;
 
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt = Instant.now();
+  @Column(name = "updated_at", nullable = false)
+  private Instant updatedAt = Instant.now();
 }
