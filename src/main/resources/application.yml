@@ -56,3 +56,7 @@ management:
 
 server:
   port: 8080
+
+psp:
+  webhook:
+    secret: ${PSP_WEBHOOK_SECRET:dev-webhook-secret}
