@@ -4,6 +4,7 @@ package com.skm.payments.domain;
 public enum PaymentStatus {
   CREATED,
   PROCESSING,
+  AUTHORIZED,
   SUCCEEDED,
   FAILED,
   FUNDS_LOCKED
