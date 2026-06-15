@@ -95,6 +95,17 @@ public class PaymentSaga {
     outboxWriter.write(PaymentEventTypes.FAILED, toEvent(payment));
   }
 
+  /**
+   * PSP authorized but capture is asynchronous: mark the held payment AUTHORIZED, await a webhook.
+   */
+  @Transactional
+  public void authorizePending(UUID paymentId, String pspReference) {
+    Payment payment = payments.findById(paymentId).orElseThrow();
+    payment.setStatus(PaymentStatus.AUTHORIZED);
+    payment.setPspReference(pspReference);
+    payment.setUpdatedAt(Instant.now());
+  }
+
   private static PaymentEvent toEvent(Payment payment) {
     return new PaymentEvent(
         UUID.randomUUID(),

@@ -206,3 +206,36 @@ disables listener auto-start. The embedded-Kafka e2e re-enables it.
 
 **Deferred:** Debezium CDC relay (replace polling) · schema registry / Avro · multi-instance relay
 coordination beyond `SKIP LOCKED`.
+
+---
+
+## M4 — PSP webhooks / async capture (done, verified green)
+
+Authorize now, capture or fail later via a signed, idempotent webhook.
+
+**Authorization outcomes:** `authorize()` returns `CAPTURED` (settle now — M2's synchronous path),
+`PENDING` (payment → `AUTHORIZED`, funds held, await webhook), or `DECLINED` (reverse). The mock PSP
+returns `CAPTURED` by default, so M2 behavior is unchanged.
+
+**Webhook:** `POST /v1/webhooks/psp` reads the raw body, verifies an HMAC-SHA256 signature
+(`X-PSP-Signature`, constant-time compare) — missing/invalid → 401. Then it dedupes on
+`webhook_events(psp_event_id)` and, if the referenced payment is `AUTHORIZED`, captures
+(→ `settle` → SUCCEEDED + `payment.succeeded` outbox event) or fails (→ `reverse` → FAILED, payer
+refunded).
+
+**Idempotency (two guards):** the `psp_event_id` dedup **and** a state guard (only `AUTHORIZED` is
+acted on) — redelivery captures once. Composes with M3: capture/fail run `settle`/`reverse`, which
+write the outbox event.
+
+**Delivered:**
+- `AuthorizationOutcome` (CAPTURED/PENDING/DECLINED), `PaymentStatus.AUTHORIZED`,
+  `PaymentSaga.authorizePending`
+- `WebhookEvent` / `WebhookStatus` + repo; `PaymentRepository.findByPspReference`
+- `WebhookSignatureVerifier` (HMAC, `psp.webhook.secret`), `PspWebhookEvent` / `PspWebhookTypes`
+- `WebhookService`, `PspWebhookController`, `InvalidSignatureException` → 401
+- Tests (all green): `WebhookCaptureIT` (capture → SUCCEEDED + payee credited + outbox event;
+  fail → FAILED + refund; duplicate → captured once), `PspWebhookControllerIT` (200 valid sig,
+  401 bad/missing sig)
+
+**Deferred:** richer event types (refund.*, dispute.*) · JWS/JWKS key rotation vs a static HMAC
+secret (done at CoinSwitch; optional hardening here).
