@@ -2,6 +2,8 @@ package com.skm.payments.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -18,8 +20,9 @@ public class LedgerTransaction {
 
   @Id private UUID id;
 
+  @Enumerated(EnumType.STRING)
   @Column(nullable = false)
-  private String type;
+  private TransactionType type;
 
   @Column(name = "reference_id", nullable = false)
   private UUID referenceId;

@@ -20,12 +20,16 @@ class LedgerServiceIT extends AbstractIntegrationTest {
 
   @Test
   void transferMovesBalances() {
-    var payer = accounts.createAccount("USER", "u-" + UUID.randomUUID(), "USER_WALLET", "INR");
-    var payee = accounts.createAccount("USER", "u-" + UUID.randomUUID(), "USER_WALLET", "INR");
+    var payer =
+        accounts.createAccount(
+            OwnerType.USER, "u-" + UUID.randomUUID(), AccountType.USER_WALLET, "INR");
+    var payee =
+        accounts.createAccount(
+            OwnerType.USER, "u-" + UUID.randomUUID(), AccountType.USER_WALLET, "INR");
     fund(payer.getId(), 100);
 
     ledger.post(
-        "PAYMENT",
+        TransactionType.PAYMENT,
         UUID.randomUUID(),
         List.of(
             new Posting(payer.getId(), Direction.DEBIT, 30),
@@ -37,14 +41,18 @@ class LedgerServiceIT extends AbstractIntegrationTest {
 
   @Test
   void insufficientFundsRollsBackEverything() {
-    var payer = accounts.createAccount("USER", "u-" + UUID.randomUUID(), "USER_WALLET", "INR");
-    var sink = accounts.createAccount("USER", "u-" + UUID.randomUUID(), "USER_WALLET", "INR");
+    var payer =
+        accounts.createAccount(
+            OwnerType.USER, "u-" + UUID.randomUUID(), AccountType.USER_WALLET, "INR");
+    var sink =
+        accounts.createAccount(
+            OwnerType.USER, "u-" + UUID.randomUUID(), AccountType.USER_WALLET, "INR");
     fund(payer.getId(), 10);
 
     assertThatThrownBy(
             () ->
                 ledger.post(
-                    "PAYMENT",
+                    TransactionType.PAYMENT,
                     UUID.randomUUID(),
                     List.of(
                         new Posting(payer.getId(), Direction.DEBIT, 20),

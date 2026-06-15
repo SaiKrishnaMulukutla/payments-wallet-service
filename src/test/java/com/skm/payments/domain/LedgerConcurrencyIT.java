@@ -31,8 +31,12 @@ class LedgerConcurrencyIT extends AbstractIntegrationTest {
 
   @Test
   void parallelDebitsNeverOversell() throws Exception {
-    var wallet = accounts.createAccount("USER", "w-" + UUID.randomUUID(), "USER_WALLET", "INR");
-    var sink = accounts.createAccount("SYSTEM", "sink-" + UUID.randomUUID(), "FEE_INCOME", "INR");
+    var wallet =
+        accounts.createAccount(
+            OwnerType.USER, "w-" + UUID.randomUUID(), AccountType.USER_WALLET, "INR");
+    var sink =
+        accounts.createAccount(
+            OwnerType.SYSTEM, "sink-" + UUID.randomUUID(), AccountType.FEE_INCOME, "INR");
     fund(wallet.getId(), 50);
 
     int attempts = 100;
@@ -50,7 +54,7 @@ class LedgerConcurrencyIT extends AbstractIntegrationTest {
                 try {
                   startGate.await();
                   ledger.post(
-                      "PAYMENT",
+                      TransactionType.PAYMENT,
                       UUID.randomUUID(),
                       List.of(
                           new Posting(wallet.getId(), Direction.DEBIT, 1),

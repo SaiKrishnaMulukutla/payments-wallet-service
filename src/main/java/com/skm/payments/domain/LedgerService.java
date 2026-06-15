@@ -45,7 +45,7 @@ public class LedgerService {
    * transaction then rolls back).
    */
   @Transactional
-  public UUID post(String type, UUID referenceId, List<Posting> postings) {
+  public UUID post(TransactionType type, UUID referenceId, List<Posting> postings) {
     assertBalanced(postings);
 
     LedgerTransaction txn = new LedgerTransaction();

@@ -2,6 +2,8 @@ package com.skm.payments.application;
 
 import com.skm.payments.domain.Account;
 import com.skm.payments.domain.AccountBalance;
+import com.skm.payments.domain.AccountType;
+import com.skm.payments.domain.OwnerType;
 import com.skm.payments.repository.AccountBalanceRepository;
 import com.skm.payments.repository.AccountRepository;
 import java.time.Instant;
@@ -22,7 +24,8 @@ public class AccountService {
   }
 
   @Transactional
-  public Account createAccount(String ownerType, String ownerId, String type, String currency) {
+  public Account createAccount(
+      OwnerType ownerType, String ownerId, AccountType type, String currency) {
     Account account = new Account();
     account.setId(UUID.randomUUID());
     account.setOwnerType(ownerType);
