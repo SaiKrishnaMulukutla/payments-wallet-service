@@ -27,11 +27,17 @@ public class PaymentSaga {
   private final PaymentRepository payments;
   private final AccountRepository accounts;
   private final LedgerService ledger;
+  private final OutboxWriter outboxWriter;
 
-  public PaymentSaga(PaymentRepository payments, AccountRepository accounts, LedgerService ledger) {
+  public PaymentSaga(
+      PaymentRepository payments,
+      AccountRepository accounts,
+      LedgerService ledger,
+      OutboxWriter outboxWriter) {
     this.payments = payments;
     this.accounts = accounts;
     this.ledger = ledger;
+    this.outboxWriter = outboxWriter;
   }
 
   /** Tx1: persist the payment (PROCESSING) and move payer -> suspense. */
@@ -71,6 +77,7 @@ public class PaymentSaga {
     payment.setStatus(PaymentStatus.SUCCEEDED);
     payment.setPspReference(pspReference);
     payment.setUpdatedAt(Instant.now());
+    outboxWriter.write(PaymentEventTypes.SUCCEEDED, toEvent(payment));
   }
 
   /** Tx2 (declined): return suspense -> payer and mark the payment failed. */
@@ -85,6 +92,18 @@ public class PaymentSaga {
             new Posting(payment.getPayerAccount(), Direction.CREDIT, payment.getAmount())));
     payment.setStatus(PaymentStatus.FAILED);
     payment.setUpdatedAt(Instant.now());
+    outboxWriter.write(PaymentEventTypes.FAILED, toEvent(payment));
+  }
+
+  private static PaymentEvent toEvent(Payment payment) {
+    return new PaymentEvent(
+        UUID.randomUUID(),
+        payment.getId(),
+        payment.getMerchantId(),
+        payment.getStatus(),
+        payment.getAmount(),
+        payment.getCurrency(),
+        Instant.now());
   }
 
   private UUID suspenseAccountId() {
