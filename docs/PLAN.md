@@ -239,3 +239,35 @@ write the outbox event.
 
 **Deferred:** richer event types (refund.*, dispute.*) · JWS/JWKS key rotation vs a static HMAC
 secret (done at CoinSwitch; optional hardening here).
+
+---
+
+## M5 — Refunds + reconciliation (done, verified green)
+
+**Refunds:** `POST /v1/payments/{id}/refunds` (idempotent on `Idempotency-Key`) refunds a captured
+payment — full → `REFUNDED`, partial → `PARTIALLY_REFUNDED` — via a `REFUND` ledger transaction
+moving payee → payer, guarded by a running `refunded_amount` (over-refund → 422). Emits a
+`payment.refunded` outbox event. `RefundService` mirrors `PaymentService` (idempotency
+claim/replay); the transactional ledger move lives in `PaymentSaga.refund`.
+
+**Reconciliation** (`@Scheduled`, `@Profile("!test")`, invoked directly in tests):
+- **Ledger integrity** (`LedgerIntegrityChecker`): asserts `Σ(DEBIT − CREDIT) = 0` and that each
+  account's materialized balance equals `Σ(CREDIT − DEBIT)` of its postings; mismatches are logged
+  at error level (the M6 `ledger_imbalance` signal).
+- **Stale-hold expiry:** `AUTHORIZED` payments older than `reconciliation.authorized-timeout`
+  (default 30m) are reversed — funds returned to the payer, `payment.failed` emitted.
+- Returns a `ReconciliationReport(ledgerNet, driftedAccounts, expiredHolds)`.
+
+**Delivered:**
+- `V3__refunds.sql` (refunds table + `payments.refunded_amount`); `Refund` / `RefundStatus` + repo;
+  `PaymentStatus` += `PARTIALLY_REFUNDED` / `REFUNDED`; `PaymentEventTypes.REFUNDED`
+- `RefundService` + `PaymentSaga.refund` + `RefundController` + DTOs + `RefundNotAllowedException` → 422
+- `LedgerIntegrityChecker`, `ReconciliationService`, `ReconciliationReport`;
+  `LedgerEntryRepository.signedNet` / `findDriftedAccounts`,
+  `PaymentRepository.findByStatusAndUpdatedAtBefore`
+- Tests (all green): `RefundServiceIT` (full / partial / over-refund→422 / idempotent),
+  `RefundControllerIT` (201 / 422), `ReconciliationIT` (ledger net = 0, drift detection),
+  `StaleHoldExpiryIT` (back-dated AUTHORIZED hold → expired → payer made whole)
+
+**Deferred:** PSP-side refund (async refund webhook) · auto-repair of detected drift (M5 only
+detects and alerts).
