@@ -1,6 +1,7 @@
 package com.skm.payments.support;
 
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -18,6 +19,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * </ul>
  */
 @SpringBootTest
+@ActiveProfiles("test")
 public abstract class AbstractIntegrationTest {
 
   private static final String EXTERNAL_DB_URL = System.getenv("EXTERNAL_DB_URL");
@@ -48,7 +50,8 @@ public abstract class AbstractIntegrationTest {
       registry.add("spring.datasource.username", postgres::getUsername);
       registry.add("spring.datasource.password", postgres::getPassword);
     }
-    // Give the concurrency test plenty of connections so the pool isn't the bottleneck.
-    registry.add("spring.datasource.hikari.maximum-pool-size", () -> "40");
+    // Keep the per-context pool small: several test contexts (distinct configs) each hold a pool,
+    // and their sum must stay under Postgres's connection limit. The concurrency tests just queue.
+    registry.add("spring.datasource.hikari.maximum-pool-size", () -> "10");
   }
 }

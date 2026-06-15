@@ -1,0 +1,6 @@
+# Test profile: don't auto-start Kafka listeners (most tests don't use a broker).
+# The end-to-end Kafka test re-enables this via @TestPropertySource + @EmbeddedKafka.
+spring:
+  kafka:
+    listener:
+      auto-startup: false
