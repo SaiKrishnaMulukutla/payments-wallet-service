@@ -137,3 +137,38 @@ docker run --rm \
   --add-host host.docker.internal:host-gateway \
   gradle:jdk21 gradle test --no-daemon
 ```
+
+---
+
+## M2 — Payments + idempotency (done, verified green)
+
+Builds the payment layer on the M1 ledger primitive (`LedgerService.post`) — no ledger changes.
+
+**Payment state machine:** CREATED → PROCESSING → SUCCEEDED | FAILED | FUNDS_LOCKED.
+
+**Saga** (two ledger transactions, the PSP call between committed phases):
+- HOLD — payer USER_WALLET → PSP_SUSPENSE (Tx1, payment PROCESSING)
+- mock PSP `authorize()` — outside any DB transaction
+- SETTLE — PSP_SUSPENSE → payee (Tx2 → SUCCEEDED), or REVERSE — PSP_SUSPENSE → payer (Tx2 → FAILED)
+
+**Idempotency (DB-durable, Stripe-style):** unique `(merchant_id, idem_key)`; the first request
+claims an IN_PROGRESS row, the rest conflict (409) or replay once COMPLETED. On operation failure
+the claim is released so a genuine retry can re-attempt.
+
+**Transaction boundaries:** claim + hold commit (Tx1) → PSP call → settle/reverse + finalize (Tx2).
+`PaymentService` orchestrates (not `@Transactional`); `PaymentSaga` and `IdempotencyService` own the
+short transactions.
+
+**Delivered:**
+- `Payment` / `PaymentStatus`, `IdempotencyRecord` / `IdempotencyStatus`, repositories
+- `MockPspClient` behind a `PaymentProvider` interface
+- `IdempotencyService`, `PaymentSaga`, `PaymentService`
+- `PaymentController` (`POST /v1/payments`, `GET /v1/payments/{id}`), DTOs, `GlobalExceptionHandler`
+  (→ 409 / 422 / 404 / 400 as RFC-7807 ProblemDetail)
+- Tests: `PaymentServiceIT` (approved / insufficient-funds / replay / body-mismatch),
+  `PaymentReversalIT` (declined → hold reversed, payer made whole),
+  `PaymentServiceConcurrencyIT` (50 identical concurrent requests → exactly one payment, payer
+  debited once), `PaymentControllerIT` (201 shape, `Idempotency-Key` required). All green.
+
+**Deferred:** outbox → Kafka (M3) · webhooks (M4) · refunds + reconciliation (M5) · Redis
+idempotency fast-path (optimization).
