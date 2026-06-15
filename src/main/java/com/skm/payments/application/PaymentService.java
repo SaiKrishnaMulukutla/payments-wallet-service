@@ -6,6 +6,7 @@ import com.skm.payments.domain.Payment;
 import com.skm.payments.infrastructure.psp.AuthorizationResult;
 import com.skm.payments.infrastructure.psp.PaymentProvider;
 import com.skm.payments.repository.PaymentRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -24,16 +25,19 @@ public class PaymentService {
   private final PaymentSaga saga;
   private final PaymentProvider psp;
   private final PaymentRepository payments;
+  private final MeterRegistry metrics;
 
   public PaymentService(
       IdempotencyService idempotency,
       PaymentSaga saga,
       PaymentProvider psp,
-      PaymentRepository payments) {
+      PaymentRepository payments,
+      MeterRegistry metrics) {
     this.idempotency = idempotency;
     this.saga = saga;
     this.psp = psp;
     this.payments = payments;
+    this.metrics = metrics;
   }
 
   public PaymentResult create(String idempotencyKey, CreatePaymentRequest request) {
@@ -71,7 +75,9 @@ public class PaymentService {
     }
 
     idempotency.markCompleted(claim.getId(), paymentId, CREATED);
-    return new PaymentResult(toResponse(load(paymentId)), CREATED, false);
+    Payment finalState = load(paymentId);
+    metrics.counter("payments.created", "outcome", finalState.getStatus().name()).increment();
+    return new PaymentResult(toResponse(finalState), CREATED, false);
   }
 
   public PaymentResponse get(UUID paymentId) {

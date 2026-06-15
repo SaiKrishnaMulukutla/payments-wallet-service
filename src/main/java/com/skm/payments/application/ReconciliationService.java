@@ -3,9 +3,11 @@ package com.skm.payments.application;
 import com.skm.payments.domain.Payment;
 import com.skm.payments.domain.PaymentStatus;
 import com.skm.payments.repository.PaymentRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,16 +28,20 @@ public class ReconciliationService {
   private final PaymentRepository payments;
   private final PaymentSaga saga;
   private final Duration authorizedTimeout;
+  private final AtomicLong ledgerImbalance = new AtomicLong(0);
 
   public ReconciliationService(
       LedgerIntegrityChecker integrity,
       PaymentRepository payments,
       PaymentSaga saga,
+      MeterRegistry registry,
       @Value("${reconciliation.authorized-timeout:30m}") Duration authorizedTimeout) {
     this.integrity = integrity;
     this.payments = payments;
     this.saga = saga;
     this.authorizedTimeout = authorizedTimeout;
+    // Must read 0 on a healthy ledger; alert if it ever drifts from zero.
+    registry.gauge("ledger.imbalance", ledgerImbalance);
   }
 
   @Scheduled(fixedDelayString = "${reconciliation.delay-ms:60000}")
@@ -45,6 +51,7 @@ public class ReconciliationService {
 
   public ReconciliationReport reconcile() {
     LedgerIntegrityChecker.Result result = integrity.check();
+    ledgerImbalance.set(result.ledgerNet());
     if (!result.balanced()) {
       log.error(
           "LEDGER IMBALANCE detected: net={} driftedAccounts={}",
