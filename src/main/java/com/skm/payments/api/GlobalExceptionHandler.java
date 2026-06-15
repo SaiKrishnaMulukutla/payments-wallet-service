@@ -4,6 +4,7 @@ import com.skm.payments.application.IdempotencyConflictException;
 import com.skm.payments.application.IdempotencyMismatchException;
 import com.skm.payments.application.InvalidSignatureException;
 import com.skm.payments.application.PaymentNotFoundException;
+import com.skm.payments.application.RefundNotAllowedException;
 import com.skm.payments.domain.InsufficientFundsException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -37,5 +38,10 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(InvalidSignatureException.class)
   ProblemDetail handleInvalidSignature(InvalidSignatureException e) {
     return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+  }
+
+  @ExceptionHandler(RefundNotAllowedException.class)
+  ProblemDetail handleRefundNotAllowed(RefundNotAllowedException e) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
   }
 }
