@@ -60,3 +60,7 @@ server:
 psp:
   webhook:
     secret: ${PSP_WEBHOOK_SECRET:dev-webhook-secret}
+
+reconciliation:
+  delay-ms: 60000
+  authorized-timeout: 30m   # AUTHORIZED holds older than this are expired (hold returned to payer)
