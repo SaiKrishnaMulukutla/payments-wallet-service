@@ -7,17 +7,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
 /**
- * The ledger primitive: post a balanced, immutable double-entry transaction.
+ * The ledger primitive: post a balanced, immutable double-entry transaction and
+ * maintain account balances safely under concurrency.
  *
- * <p>The {@link #assertBalanced} invariant (postings net to zero) is the heart of the
- * ledger and is fully implemented here; the database also enforces it via a deferred
- * constraint trigger (defense in depth). Balance maintenance under a pessimistic
- * {@code SELECT ... FOR UPDATE} with the non-negative guard is the M1 task — see the
- * TODO in {@link #post}.
+ * <p>Balance convention: a CREDIT increases an account's balance, a DEBIT decreases it.
+ * Balance rows are locked with {@code SELECT ... FOR UPDATE} in ascending account-id order
+ * (deterministic lock ordering avoids deadlocks), the signed delta is applied, and the
+ * non-negative invariant is enforced before the postings are written — all in one
+ * transaction. The database also enforces the net-zero invariant via a deferred trigger.
  */
 @Service
 public class LedgerService {
@@ -39,9 +41,9 @@ public class LedgerService {
     }
 
     /**
-     * Post a balanced transaction. Returns the new transaction id.
-     * Runs in one DB transaction; the deferred trigger validates the net-zero
-     * invariant again at COMMIT.
+     * Post a balanced transaction; returns the new transaction id. Runs in one DB
+     * transaction. Throws {@link InsufficientFundsException} if any debit would make a
+     * balance negative (the whole transaction then rolls back).
      */
     @Transactional
     public UUID post(String type, UUID referenceId, List<Posting> postings) {
@@ -54,6 +56,26 @@ public class LedgerService {
         txn.setCreatedAt(Instant.now());
         transactions.save(txn);
 
+        // Lock balance rows in a deterministic order (ascending account id) to prevent deadlocks.
+        List<Posting> lockOrdered = postings.stream()
+                .sorted(Comparator.comparing(Posting::accountId))
+                .toList();
+
+        for (Posting p : lockOrdered) {
+            AccountBalance balance = balances.findByIdForUpdate(p.accountId())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "no balance row for account " + p.accountId()));
+
+            long delta = (p.direction() == Direction.CREDIT) ? p.amount() : -p.amount();
+            long updated = balance.getBalance() + delta;
+            if (updated < 0) {
+                throw new InsufficientFundsException(p.accountId(), balance.getBalance(), p.amount());
+            }
+            balance.setBalance(updated);
+            balance.setUpdatedAt(Instant.now());
+            balances.save(balance);
+        }
+
         for (Posting p : postings) {
             LedgerEntry entry = new LedgerEntry();
             entry.setTransactionId(txn.getId());
@@ -62,17 +84,14 @@ public class LedgerService {
             entry.setAmount(p.amount());
             entry.setCreatedAt(Instant.now());
             entries.save(entry);
-
-            // TODO (M1): balances.findByIdForUpdate(p.accountId()) ->
-            //   apply signed delta, enforce non-negative, save (optimistic @Version).
         }
 
         return txn.getId();
     }
 
     /**
-     * The double-entry invariant: a transaction needs >= 2 postings, each with a
-     * positive amount, whose signed sum is zero (DEBIT = +amount, CREDIT = -amount).
+     * The double-entry invariant: at least 2 postings, each with a positive amount, whose
+     * signed sum is zero (DEBIT = +amount, CREDIT = -amount, so total debits = total credits).
      */
     void assertBalanced(List<Posting> postings) {
         if (postings == null || postings.size() < 2) {

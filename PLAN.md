@@ -98,3 +98,42 @@ compensation · idempotent webhook processing with signature verification.
 - TigerBeetle — [Debit/Credit: the schema for OLTP](https://docs.tigerbeetle.com/concepts/debit-credit/)
 - Transactional outbox — [Reliable event publishing](https://james-carr.org/posts/2026-01-15-transactional-outbox-pattern/) · [Outbox vs CDC trade-offs](https://singhajit.com/transactional-outbox-pattern/)
 - Virtual threads — [Spring Boot 3.2+ / Java 21 high-throughput guide](https://www.springboot-123.com/en/blog/spring-boot-virtual-threads-java21-guide/) · [Virtual threads in Spring Boot 3.4+](https://ankurm.com/leveraging-virtual-threads-in-spring-boot-3-4-building-high-throughput-services/)
+
+---
+
+## M1 — Ledger core (detailed plan / status)
+
+Turns the ledger from "records postings" into "maintains balances safely under concurrency."
+
+**Balance convention:** a CREDIT increases an account's balance, a DEBIT decreases it
+(`delta = credit ? +amount : -amount`); reject when `balance + delta < 0`. Consistent with the
+V1 net-zero trigger — per-account deltas sum to zero, so money is conserved per transaction.
+
+**Concurrency:** `LedgerService.post()` locks each balance row with `SELECT ... FOR UPDATE`
+(`AccountBalanceRepository.findByIdForUpdate`) in **ascending account-id order** (deterministic
+lock ordering ⇒ no deadlocks), applies the signed delta, enforces non-negative, and commits
+atomically with the postings. `@Version` remains a secondary guard.
+
+**Delivered in M1:**
+- `LedgerService.post()` balance maintenance (lock-ordered, non-negative, atomic).
+- `InsufficientFundsException` (→ HTTP 422 in M2).
+- `AccountService.createAccount()` (account + zero balance row).
+- Tests: `LedgerServiceTest` (invariant, unit), `LedgerServiceIT` (transfer / insufficient-funds
+  rollback), and `LedgerConcurrencyIT` — 100 parallel 1-unit debits on a wallet funded for 50 ⇒
+  exactly 50 succeed, 50 `InsufficientFunds`, final balance 0, never negative.
+
+**Deferred:** `spring.jpa.hibernate.ddl-auto` is held at `none` (not `validate`) for now to avoid a
+`char(3)`/`varchar` column-type validation mismatch; flip it once entity↔column types are aligned
+(small follow-up).
+
+**Run the tests** (no host JDK needed — runs in the Gradle image with the Docker socket mounted):
+
+```bash
+docker run --rm \
+  -v "$PWD":/home/gradle/src -w /home/gradle/src \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
+  -e TESTCONTAINERS_RYUK_DISABLED=true \
+  --add-host host.docker.internal:host-gateway \
+  gradle:jdk21 gradle test --no-daemon
+```
