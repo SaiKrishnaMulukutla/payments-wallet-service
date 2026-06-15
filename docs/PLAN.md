@@ -271,3 +271,41 @@ claim/replay); the transactional ledger move lives in `PaymentSaga.refund`.
 
 **Deferred:** PSP-side refund (async refund webhook) · auto-repair of detected drift (M5 only
 detects and alerts).
+
+---
+
+## M6 — Observability + load test
+
+**Goal:** make the service measurable and prove it under load.
+
+**Observability** (Micrometer → Prometheus, scraped at `/actuator/prometheus`):
+- `payments_created_total{outcome}` — a counter incremented in `PaymentService` keyed by the
+  final `PaymentStatus`, so success/failure mix is a first-class metric.
+- `http_server_requests_seconds` — request latency with **p95/p99 histograms** enabled via
+  `management.metrics.distribution.percentiles-histogram.http.server.requests: true`.
+- `ledger_imbalance` — a gauge backed by an `AtomicLong` in `ReconciliationService`, set each
+  reconciliation pass to `Σ(DEBIT − CREDIT)`. **Must read 0**; anything else means the ledger
+  drifted and is the single most important alarm in the system.
+- Grafana ships with the Prometheus datasource pre-provisioned (`ops/grafana/provisioning`).
+
+**Load test** (`load/payments.js`, k6): ramping-VUs 5→20 over 50s, 10 funded payers (spreads the
+payer-row `FOR UPDATE` contention) → 1 payee, unique `Idempotency-Key` per VU/iteration.
+`load/seed.sql` provisions the fixtures idempotently. k6 runs on the compose network against
+`http://app:8080`, so it is independent of host-port conflicts.
+
+**Measured** (local, single instance on Rancher Desktop — Docker-in-VM on an Apple-Silicon Mac):
+**3,691 payments, 0 failures (100% `201`)**, **73.8 payments/s**, latency **median 214 ms ·
+p95 452 ms · p99 614 ms · max 1.09 s**. This is end-to-end write throughput — each request is an
+idempotency claim + a multi-posting double-entry transfer under row locks + an outbox write — not a
+read benchmark, and not a tuned/multi-instance deployment.
+
+**Delivered:**
+- `MeterRegistry` wiring in `PaymentService` (`payments_created_total`) and
+  `ReconciliationService` (`ledger_imbalance` gauge); histogram config in `application.yml`
+- `docker-compose.yml` += `prometheus` (v2.54.1) + `grafana` (11.2.0); `ops/prometheus.yml`,
+  `ops/grafana/provisioning/datasources/datasource.yml`
+- `load/payments.js` (k6 scenario + p99 threshold) + `load/seed.sql`
+- `README.md` rewritten: architecture (Mermaid), run/observability/load-test/milestone sections
+
+**Deferred:** Grafana dashboard JSON (datasource is provisioned; panels are click-to-build) ·
+alerting rules · distributed tracing (OpenTelemetry).
