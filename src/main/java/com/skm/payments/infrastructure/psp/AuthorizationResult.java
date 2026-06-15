@@ -1,13 +1,18 @@
 package com.skm.payments.infrastructure.psp;
 
 /** Outcome of a PSP authorization. */
-public record AuthorizationResult(boolean approved, String reference, String declineReason) {
+public record AuthorizationResult(
+    AuthorizationOutcome outcome, String reference, String declineReason) {
 
-  public static AuthorizationResult approved(String reference) {
-    return new AuthorizationResult(true, reference, null);
+  public static AuthorizationResult captured(String reference) {
+    return new AuthorizationResult(AuthorizationOutcome.CAPTURED, reference, null);
+  }
+
+  public static AuthorizationResult pending(String reference) {
+    return new AuthorizationResult(AuthorizationOutcome.PENDING, reference, null);
   }
 
   public static AuthorizationResult declined(String reason) {
-    return new AuthorizationResult(false, null, reason);
+    return new AuthorizationResult(AuthorizationOutcome.DECLINED, null, reason);
   }
 }
