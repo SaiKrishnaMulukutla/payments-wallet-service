@@ -50,4 +50,7 @@ public class Payment {
 
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt = Instant.now();
+
+  @Column(name = "refunded_amount", nullable = false)
+  private Long refundedAmount = 0L;
 }
