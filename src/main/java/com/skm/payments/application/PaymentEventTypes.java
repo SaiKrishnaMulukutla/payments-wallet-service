@@ -5,6 +5,7 @@ public final class PaymentEventTypes {
 
   public static final String SUCCEEDED = "payment.succeeded";
   public static final String FAILED = "payment.failed";
+  public static final String REFUNDED = "payment.refunded";
 
   private PaymentEventTypes() {}
 }
