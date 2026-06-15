@@ -1,0 +1,10 @@
+package com.skm.payments.repository;
+
+import com.skm.payments.domain.Payment;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface PaymentRepository extends JpaRepository<Payment, UUID> {
+
+  long countByPayerAccount(UUID payerAccount);
+}
