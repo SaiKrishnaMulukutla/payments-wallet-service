@@ -172,3 +172,37 @@ short transactions.
 
 **Deferred:** outbox → Kafka (M3) · webhooks (M4) · refunds + reconciliation (M5) · Redis
 idempotency fast-path (optimization).
+
+---
+
+## M3 — Outbox + Kafka (done, verified green)
+
+Reliable event publishing on top of M2's saga — no lost/phantom events, idempotent consumption.
+
+**Outbox write:** `PaymentSaga.settle`/`reverse` writes a `payment.succeeded`/`payment.failed`
+`OutboxEvent` in the **same transaction** as the state change (atomic — solves the dual-write
+problem). Payload is JSON stored in the `outbox.payload` jsonb column (`@JdbcTypeCode(SqlTypes.JSON)`).
+
+**Relay:** `OutboxRelay` (`@Scheduled`, `@Transactional`) selects unpublished rows with
+`FOR UPDATE SKIP LOCKED LIMIT`, publishes via an `EventPublisher`, then stamps `published_at`.
+Publishing is abstracted behind `EventPublisher` so the relay is testable without a broker;
+`KafkaEventPublisher` blocks for the ack, so a failed send leaves the row to retry.
+
+**Consumer:** `PaymentEventConsumer` (`@KafkaListener`) dedupes on `processed_events(event_id)` —
+at-least-once delivery + dedup = effectively exactly-once.
+
+**Profiles:** `SchedulingConfig` and `KafkaConfig` are `@Profile("!test")`; the `test` profile
+disables listener auto-start. The embedded-Kafka e2e re-enables it.
+
+**Delivered:**
+- `V2__processed_events.sql`; `OutboxEvent` / `ProcessedEvent` + repos (`lockUnpublishedBatch`
+  native `SKIP LOCKED`)
+- `OutboxWriter`, `PaymentEvent` / `PaymentEventTypes`, wired into the saga
+- `EventPublisher` / `KafkaEventPublisher`, `KafkaConfig` (topic), `OutboxRelay`,
+  `PaymentEventConsumer`
+- Tests (all green): `OutboxWriteIT` (atomic write), `OutboxRelayIT` (publish + mark via a recording
+  publisher), `ConsumerIdempotencyIT` (duplicate → handled once),
+  `PaymentEventsEndToEndIT` (`@EmbeddedKafka`: payment → outbox → relay → Kafka → consumer, once)
+
+**Deferred:** Debezium CDC relay (replace polling) · schema registry / Avro · multi-instance relay
+coordination beyond `SKIP LOCKED`.
