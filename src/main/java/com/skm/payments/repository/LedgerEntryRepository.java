@@ -3,12 +3,16 @@ package com.skm.payments.repository;
 import com.skm.payments.domain.LedgerEntry;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> {
 
   List<LedgerEntry> findByAccountIdOrderByCreatedAtDesc(UUID accountId);
+
+  /** A bounded page of an account's most-recent postings (newest first). */
+  List<LedgerEntry> findByAccountIdOrderByCreatedAtDesc(UUID accountId, Pageable pageable);
 
   /** Net of all postings (debits minus credits) — must be zero in a balanced ledger. */
   @Query(
