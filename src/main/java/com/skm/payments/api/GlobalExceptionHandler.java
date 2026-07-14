@@ -1,5 +1,6 @@
 package com.skm.payments.api;
 
+import com.skm.payments.application.AccountNotFoundException;
 import com.skm.payments.application.IdempotencyConflictException;
 import com.skm.payments.application.IdempotencyMismatchException;
 import com.skm.payments.application.InvalidSignatureException;
@@ -32,6 +33,11 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(PaymentNotFoundException.class)
   ProblemDetail handleNotFound(PaymentNotFoundException e) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+  }
+
+  @ExceptionHandler(AccountNotFoundException.class)
+  ProblemDetail handleAccountNotFound(AccountNotFoundException e) {
     return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
   }
 
