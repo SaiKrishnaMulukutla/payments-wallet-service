@@ -189,13 +189,14 @@ Redis is the fast path; Postgres is the durable arbiter (survives a Redis flush)
   the true concurrency limit, so set `leak-detection-threshold` and size the pool deliberately.
   Detect pinning in staging with `-Djdk.tracePinnedThreads=short`.
 
-## 7. Transactional outbox + Kafka
+## 7. Transactional outbox
 
 - Business change and the `outbox` insert commit **atomically** in the same transaction — this
   is what eliminates the dual-write problem (DB says X, but the event was lost / or vice-versa).
-- A scheduled **OutboxPoller** (`@Scheduled`) selects `WHERE published_at IS NULL`, publishes to
-  Kafka, then stamps `published_at`. (Upgrade path: Debezium CDC on the `outbox` table.)
-- Consumers are **idempotent** (dedupe on event id) since delivery is at-least-once.
+- A scheduled **OutboxRelay** (`@Scheduled`) selects `WHERE published_at IS NULL` (`FOR UPDATE SKIP
+  LOCKED`), hands each event to a pluggable `EventPublisher`, then stamps `published_at`. The
+  publisher is a **logging sink** now; swap in a broker (Kafka, and optionally Debezium CDC) for real
+  fan-out. Delivery is at-least-once, so a broker-backed consumer would dedupe on event id.
 
 ## 8. Webhook signature verification
 
@@ -217,7 +218,7 @@ com.skm.payments
 ├── infrastructure/
 │   ├── persistence/  JPA entities + repositories, Flyway migrations
 │   ├── psp/          MockPspClient
-│   ├── messaging/    OutboxPoller, KafkaPublisher, event consumers
+│   ├── messaging/    OutboxRelay, EventPublisher (LoggingEventPublisher)
 │   └── redis/        IdempotencyLock, RateLimiter
 └── config/         beans, properties, security
 ```
@@ -242,4 +243,4 @@ com.skm.payments
 - **Idempotency test:** 50 threads `POST` the same Idempotency-Key → one payment row, one ledger
   transaction, all responses identical.
 - **Webhook test:** tampered body → 401; replayed `psp_event_id` → single state change.
-- Use **Testcontainers** for Postgres / Redis / Kafka in integration tests.
+- Use **Testcontainers** for Postgres in integration tests.

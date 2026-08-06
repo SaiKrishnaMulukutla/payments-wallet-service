@@ -32,17 +32,6 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-    consumer:
-      group-id: payments
-      auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-
 management:
   endpoints:
     web:

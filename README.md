@@ -2,10 +2,10 @@
 
 A production-grade payments backend: a **double-entry ledger** as the source of truth,
 **idempotent** payment APIs, a **hold → settle saga**, **async capture via signed webhooks**,
-**refunds**, a **transactional outbox → Kafka** with idempotent consumers, a **reconciliation**
-job, and **Prometheus/Grafana** observability.
+**refunds**, a **transactional outbox** (dual-write-safe) drained by a pluggable relay, a
+**reconciliation** job, and **Prometheus/Grafana** observability.
 
-**Stack:** Java 21 (virtual threads) · Spring Boot 3.4 · PostgreSQL · Redis · Kafka · Docker
+**Stack:** Java 21 (virtual threads) · Spring Boot 3.4 · PostgreSQL · Redis · Docker
 
 Design docs: [docs/PLAN.md](docs/PLAN.md) · [docs/HLD.md](docs/HLD.md) · [docs/LLD.md](docs/LLD.md)
 
@@ -23,8 +23,7 @@ flowchart LR
   psp -. HMAC-signed capture/fail webhook .-> wh[Webhook API]
   wh --> ledger
   ledger --> outbox[(outbox)]
-  outbox --> relay[Outbox relay] --> kafka[[Kafka]]
-  kafka --> consumer[Idempotent consumer - processed_events]
+  outbox --> relay[Outbox relay] --> sink[Event sink - pluggable: log now, broker later]
   recon[Reconciliation job] --> ledger
   api --> prom[actuator/prometheus] --> grafana[Grafana]
 ```
@@ -67,8 +66,9 @@ POST /v1/webhooks/psp              X-PSP-Signature: <hmac>   -> 200 | 401
 - **Saga** — `hold → authorize → settle | reverse`, with the PSP call outside any DB transaction.
 - **Async capture** — `authorize` may return `PENDING`; a signed (`HMAC-SHA256`) webhook captures or
   fails the held payment, idempotent on `psp_event_id` plus a state guard.
-- **Transactional outbox** — events written in the same tx as the state change; a relay publishes to
-  Kafka (`FOR UPDATE SKIP LOCKED`); consumers dedupe → effectively exactly-once.
+- **Transactional outbox** — events written in the same tx as the state change (solves the dual-write
+  problem); a scheduled relay drains them (`FOR UPDATE SKIP LOCKED`) via a pluggable `EventPublisher`
+  (a logging sink now; swap in a broker like Kafka for downstream fan-out).
 - **Refunds** — full/partial, idempotent, over-refund guarded.
 - **Reconciliation** — asserts `Σdebits = Σcredits` and balance == Σ postings; expires stale holds.
 
@@ -107,7 +107,7 @@ gradle test     # JDK 21 + Gradle 8.11.x
 | M0 | Skeleton: Dockerized stack, Flyway schema, double-entry trigger | ✅ |
 | M1 | Ledger balance maintenance + 100-parallel oversell test | ✅ |
 | M2 | Payments + idempotency + hold→settle saga | ✅ |
-| M3 | Transactional outbox → Kafka + idempotent consumer | ✅ |
+| M3 | Transactional outbox + scheduled relay (pluggable `EventPublisher`) | ✅ |
 | M4 | Async capture via HMAC-signed webhooks | ✅ |
 | M5 | Refunds + reconciliation | ✅ |
 | M6 | Observability + k6 load test + this README | ✅ |

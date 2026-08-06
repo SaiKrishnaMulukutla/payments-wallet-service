@@ -24,11 +24,11 @@ double-charged.
   │ idem fast- │               │  ledger (source  │◀──saga──▶│ authorize /  │
   │ lock, rate │               │  of truth)+outbox│          │ capture      │
   └────────────┘               └────────┬─────────┘          └──────────────┘
-                                         │ outbox poll / Debezium CDC
+                                         │ scheduled outbox relay (EventPublisher)
                                          ▼
                                   ┌──────────────┐
-                                  │    Kafka     │──▶ consumers: notify, analytics,
-                                  └──────────────┘     ledger-projection
+                                  │  Event sink  │──▶ log now; swap in a broker (Kafka)
+                                  └──────────────┘     for notify / analytics / projections
                                          ▲
    Mock PSP ───webhook (HMAC signed)─────┘ via  Webhook API ─▶ payment state machine
 ```
@@ -56,8 +56,8 @@ double-charged.
 | PostgreSQL | Source of truth: ledger, payments, idempotency keys, outbox, webhook dedupe |
 | Redis | Idempotency fast-path lock; per-merchant rate limiting |
 | Mock PSP | Simulates an external provider: authorize/capture, async webhook callbacks |
-| Outbox poller / CDC | Reads unpublished outbox rows → publishes to Kafka |
-| Kafka + consumers | Downstream fan-out: notifications, analytics, projections |
+| Outbox relay | Reads unpublished outbox rows → hands them to a pluggable `EventPublisher` (log sink now) |
+| Event sink | Fan-out target; swap the log sink for a broker (e.g. Kafka) when downstream consumers are needed |
 
 ## 5. The money-movement saga
 
@@ -114,13 +114,13 @@ the **external call never happens inside a DB transaction holding row locks**.
   strong transaction + JPA story; broadens a Go-heavy profile.
 - **PostgreSQL** — ACID, row locking (`FOR UPDATE`), `CHECK` constraints, JSONB for outbox/payloads.
 - **Redis** — sub-ms idempotency fast-path lock and rate limiting.
-- **Kafka** — durable event fan-out; pairs with the outbox pattern for at-least-once delivery.
+- **Pluggable event sink** (`EventPublisher`) — the outbox relay drains to a logging sink today; a broker (Kafka) drops in behind the same interface for durable fan-out when downstream consumers exist.
 - **Mock PSP** — keeps the project self-contained while still exercising the saga and webhooks.
 - **Java 21 virtual threads** (`spring.threads.virtual.enabled=true`) — the request path blocks on the PSP network call, the ideal virtual-thread workload; gives high throughput with plain blocking code (~3x RPS, ~70% less memory reported) while the bounded DB connection pool stays the real concurrency limiter. Avoid `synchronized` around I/O (use `ReentrantLock`) to prevent carrier-thread pinning.
 
 ## 9. Scaling & evolution (future, document don't build)
 
 - Shard ledger by account_id; keep per-account serialization.
-- Replace the outbox poller with Debezium CDC for lower latency.
-- Partition Kafka topics by merchant; add consumer-group parallelism.
+- Add a broker (Kafka) behind `EventPublisher` for real fan-out; later Debezium CDC on the outbox for lower latency.
+- Partition topics by merchant; add consumer-group parallelism.
 - Read replicas for balance/statement queries.

@@ -1,15 +1,7 @@
-# Render/cloud profile: external Aiven Kafka (SASL SCRAM-SHA-256 + TLS) and no local Redis.
-# Activate with SPRING_PROFILES_ACTIVE=cloud. Kafka creds come from env (never committed).
+# Render/cloud profile. Activate with SPRING_PROFILES_ACTIVE=cloud.
 spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}?sslmode=require   # Neon requires TLS
-  kafka:
-    properties:
-      security.protocol: SASL_SSL
-      sasl.mechanism: SCRAM-SHA-256
-      sasl.jaas.config: ${KAFKA_SASL_JAAS}
-      ssl.truststore.location: ${KAFKA_TRUSTSTORE_LOCATION:/tmp/kafka-ca.pem}
-      ssl.truststore.type: PEM
 
 management:
   health:

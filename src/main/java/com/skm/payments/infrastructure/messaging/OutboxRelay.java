@@ -11,13 +11,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Polls the outbox and publishes unpublished events to Kafka, marking each published once the
- * broker acknowledges. Delivery is at-least-once: if marking fails after a send, the event is
- * re-published next poll (consumers dedupe). Runs on a schedule in production; tests invoke {@link
- * #publishBatch} directly.
+ * Polls the outbox and hands unpublished events to the {@link EventPublisher}, marking each
+ * published once it is accepted. Delivery is at-least-once: if marking fails after a publish, the
+ * event is re-sent next poll. Runs on a schedule in production; tests invoke {@link #publishBatch}
+ * directly.
  */
 @Component
 public class OutboxRelay {
+
+  static final String PAYMENT_EVENTS_STREAM = "payment-events";
 
   private static final Logger log = LoggerFactory.getLogger(OutboxRelay.class);
   private static final int BATCH_SIZE = 100;
@@ -38,9 +40,7 @@ public class OutboxRelay {
     for (OutboxEvent event : batch) {
       try {
         publisher.publish(
-            KafkaConfig.PAYMENT_EVENTS_TOPIC,
-            event.getAggregateId().toString(),
-            event.getPayload());
+            PAYMENT_EVENTS_STREAM, event.getAggregateId().toString(), event.getPayload());
       } catch (RuntimeException e) {
         log.warn("publish failed for event {}; leaving it for the next poll", event.getId(), e);
         break; // commit what already succeeded; retry the rest later

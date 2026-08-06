@@ -1,5 +1,5 @@
 # Render Blueprint: Postgres + wallet-service (this repo) + MCP gateway (sibling repo).
-# Kafka is external (Aiven); Redis is unused at runtime (disabled via the `cloud` profile).
+# Redis is unused at runtime (health check disabled via the `cloud` profile). No Kafka.
 # Secrets are `sync: false` — set them in the Render dashboard, never in this file.
 # Postgres is external (Neon, AWS Singapore, permanent free tier) via DB_* env vars.
 services:
@@ -21,12 +21,6 @@ services:
       - key: DB_USER
         sync: false
       - key: DB_PASSWORD
-        sync: false
-      - key: KAFKA_BOOTSTRAP
-        sync: false
-      - key: KAFKA_SASL_JAAS
-        sync: false
-      - key: KAFKA_CA_CERT
         sync: false
       - key: PSP_WEBHOOK_SECRET
         sync: false
