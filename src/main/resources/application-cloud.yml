@@ -8,7 +8,7 @@ spring:
       security.protocol: SASL_SSL
       sasl.mechanism: SCRAM-SHA-256
       sasl.jaas.config: ${KAFKA_SASL_JAAS}
-      ssl.truststore.location: ${KAFKA_TRUSTSTORE_LOCATION:/app/kafka-ca.pem}
+      ssl.truststore.location: ${KAFKA_TRUSTSTORE_LOCATION:/tmp/kafka-ca.pem}
       ssl.truststore.type: PEM
 
 management:

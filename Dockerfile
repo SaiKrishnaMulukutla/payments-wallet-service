@@ -15,4 +15,4 @@ COPY --from=build /home/gradle/src/build/libs/*.jar app.jar
 USER app
 EXPOSE 8080
 # Decode the base64 Aiven CA (if provided) into a PEM truststore, then run. Honors $PORT on Render.
-ENTRYPOINT ["sh", "-c", "[ -n \"$KAFKA_CA_CERT\" ] && echo \"$KAFKA_CA_CERT\" | base64 -d > /app/kafka-ca.pem; exec java -jar app.jar"]
+ENTRYPOINT ["sh", "-c", "[ -n \"$KAFKA_CA_CERT\" ] && echo \"$KAFKA_CA_CERT\" | base64 -d > /tmp/kafka-ca.pem; exec java -jar app.jar"]
