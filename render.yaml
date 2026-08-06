@@ -1,0 +1,62 @@
+# Render Blueprint: Postgres + wallet-service (this repo) + MCP gateway (sibling repo).
+# Kafka is external (Aiven); Redis is unused at runtime (disabled via the `cloud` profile).
+# Secrets are `sync: false` — set them in the Render dashboard, never in this file.
+databases:
+  - name: payments-db
+    databaseName: payments
+    user: payments
+    plan: free
+
+services:
+  - type: web
+    name: payments-wallet-service
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    plan: free
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: cloud
+      - key: DB_HOST
+        fromDatabase: { name: payments-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: payments-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: payments-db, property: database }
+      - key: DB_USER
+        fromDatabase: { name: payments-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: payments-db, property: password }
+      - key: KAFKA_BOOTSTRAP
+        sync: false
+      - key: KAFKA_SASL_JAAS
+        sync: false
+      - key: KAFKA_CA_CERT
+        sync: false
+      - key: PSP_WEBHOOK_SECRET
+        sync: false
+
+  - type: web
+    name: payments-mcp-server
+    runtime: docker
+    repo: https://github.com/SaiKrishnaMulukutla/payments-mcp-server
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: PAYMENTS_TRANSPORT
+        value: streamable-http
+      - key: PAYMENTS_BACKEND
+        value: http
+      # Set to the wallet-service URL after its first deploy (e.g. https://payments-wallet-service.onrender.com).
+      - key: PAYMENTS_BASE_URL
+        sync: false
+      - key: PAYMENTS_MANDATE_SECRET
+        sync: false
+      - key: PAYMENTS_AUTH_SECRET
+        sync: false
+      - key: PAYMENTS_AUTH_ISSUER
+        sync: false
+      - key: PAYMENTS_AUTH_RESOURCE_URL
+        sync: false
+      - key: PAYMENTS_REDIS_URL
+        sync: false
