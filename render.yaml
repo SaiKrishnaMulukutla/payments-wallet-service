@@ -1,12 +1,7 @@
 # Render Blueprint: Postgres + wallet-service (this repo) + MCP gateway (sibling repo).
 # Kafka is external (Aiven); Redis is unused at runtime (disabled via the `cloud` profile).
 # Secrets are `sync: false` — set them in the Render dashboard, never in this file.
-databases:
-  - name: payments-db
-    databaseName: payments
-    user: payments
-    plan: free
-
+# Postgres is external (Neon, AWS Singapore, permanent free tier) via DB_* env vars.
 services:
   - type: web
     name: payments-wallet-service
@@ -17,16 +12,16 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: cloud
-      - key: DB_HOST
-        fromDatabase: { name: payments-db, property: host }
+      - key: DB_HOST        # from the Neon connection URI
+        sync: false
       - key: DB_PORT
-        fromDatabase: { name: payments-db, property: port }
+        sync: false
       - key: DB_NAME
-        fromDatabase: { name: payments-db, property: database }
+        sync: false
       - key: DB_USER
-        fromDatabase: { name: payments-db, property: user }
+        sync: false
       - key: DB_PASSWORD
-        fromDatabase: { name: payments-db, property: password }
+        sync: false
       - key: KAFKA_BOOTSTRAP
         sync: false
       - key: KAFKA_SASL_JAAS
